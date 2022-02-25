@@ -5,10 +5,11 @@
 
 import json
 import os
-import click
+import math
 from typing import List
+import numpy as np
 
-from dataset_helper import *
+from .dataset_helper import *
 
 data_path = 'data'
 
@@ -96,6 +97,20 @@ def get_annotations_mit_bih_long_term() -> Generator[Tuple[str, List[int]], None
         frames_annotations_list = qrs_annotations.index.tolist()
         yield record_id, frames_annotations_list
 
+def get_bidmc_hr_values(sample_name):
+    with open(f'{data_path}/bidmc-ppg-and-respiration-database/bidmc_csv/{sample_name}_Numerics.csv') as f:
+        return [float(line.split(",")[1]) for line in f.readlines()[1:]]
+
+def get_annotations_bidmc_ppg_and_respiration() -> Generator[Tuple[str, List[int]], None, None]:
+    records_list = pd.read_csv(f'{data_path}/bidmc-ppg-and-respiration-database/RECORDS', names=['id'])
+    for record_id in records_list['id']:        
+        sample_name = record_id.replace("bidmc", "bidmc_")
+        hr_values = get_bidmc_hr_values(sample_name)
+        hr_avg = np.average([x for x in hr_values if not math.isnan(x)])
+        total_peaks = int(round(hr_avg / 60 * len(hr_values)))
+        fake_peaks = [0] * total_peaks
+        yield record_id, np.asarray(fake_peaks)
+
 
 # generator of annotations' readers
 dataset_annot_generators = {
@@ -108,7 +123,8 @@ dataset_annot_generators = {
     'mit-bih-noise-stress-test-e_6': get_annotations_mit_bih_noise(),
     'european-stt': get_annotations_european_stt(),
     'mit-bih-supraventricular-arrhythmia': get_annotations_mit_bih_supraventricular_arrhythmia(),
-    'mit-bih-long-term-ecg': get_annotations_mit_bih_long_term()
+    'mit-bih-long-term-ecg': get_annotations_mit_bih_long_term(),
+    'bidmc-ppg-and-respiration': get_annotations_bidmc_ppg_and_respiration()
 }
 
 
@@ -125,24 +141,3 @@ def write_annotations_json(dataset: str, dict_annotations: Dict[str, List[int]])
     with open(f'output/annotations/{dataset}.json', 'w') as outfile:
         json.dump(dict_annotations, outfile)
 
-
-# parse arguments
-@click.command()
-@click.option('--data', required=True, type=click.Choice(datasets_list, case_sensitive=False), help='dataset')
-def main(data: str) -> None:
-    dataset = data
-    data_generator = dataset_annot_generators[dataset]
-
-    annotations_dict = {}
-    print(f'Beat annotations on dataset {dataset} are being recovered....')
-    while True:
-        try:
-            record_id, record_annotations = next(data_generator)
-            annotations_dict[record_id] = record_annotations
-        except StopIteration:
-            write_annotations_json(dataset, annotations_dict)
-            print(f'Beat annotations on dataset {dataset} are successfully recovered....')
-            break
-
-
-main()

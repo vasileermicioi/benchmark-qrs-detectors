@@ -461,6 +461,24 @@ def read_mit_bih_long_term() -> Generator[Tuple[str, Dict[str, numpy.ndarray]], 
             record_sigs[record.sig_name[id_sig]] = record.p_signal[:, id_sig]
         yield record_id, record_sigs
 
+def read_bidmc_ppg_and_respiration() -> Generator[Tuple[str, Dict[str, numpy.ndarray]], None, None]:
+    """
+    read records from MIT BIH Long Term ECG Database.
+
+    :return: ID and values of sampled signals for each record
+    :rtype: tuple(str, dict(str, ndarray))
+    """
+    allowed_channels = ['II,']
+    records_list = pd.read_csv(f'{data_path}/bidmc-ppg-and-respiration-database/RECORDS', names=['id'])
+    for record_id in records_list['id']:
+        record = wfdb.rdrecord(f'{data_path}/bidmc-ppg-and-respiration-database/{record_id}')
+        record_sigs = {}
+        for id_sig in range(len(record.sig_name)):
+            if not record.sig_name[id_sig] in allowed_channels:
+                continue
+            record_sigs[record.sig_name[id_sig]] = record.p_signal[:, id_sig]
+        yield record_id, record_sigs
+
 
 # generator for records' readers
 dataset_generators = {
@@ -473,7 +491,8 @@ dataset_generators = {
     'mit-bih-noise-stress-test-e_6': read_mit_bih_noise_e_6(),
     'european-stt': read_european_stt(),
     'mit-bih-supraventricular-arrhythmia': read_mit_bih_supraventricular_arrhythmia(),
-    'mit-bih-long-term-ecg': read_mit_bih_long_term()
+    'mit-bih-long-term-ecg': read_mit_bih_long_term(),
+    'bidmc-ppg-and-respiration': read_bidmc_ppg_and_respiration()
 }
 
 
@@ -488,7 +507,7 @@ records = {
     'mit-bih-noise-stress-test-e_6': mit_bih_noise_stress_test_e_6,
     'european-stt': european_stt,
     'mit-bih-supraventricular-arrhythmia': mit_bih_supraventricular_arrhythmia,
-    'mit-bih-long-term-ecg': mit_bih_long_term
+    'mit-bih-long-term-ecg': mit_bih_long_term,
 }
 
 # generator for value of signals' sampling frequency
@@ -502,5 +521,6 @@ sampling_frequency = {
     'mit-bih-noise-stress-test-e_6': 360,
     'european-stt': 250,
     'mit-bih-supraventricular-arrhythmia': 128,
-    'mit-bih-long-term-ecg': 128
+    'mit-bih-long-term-ecg': 128,
+    'bidmc-ppg-and-respiration': 125
 }

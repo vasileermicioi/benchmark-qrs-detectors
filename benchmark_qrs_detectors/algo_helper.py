@@ -9,14 +9,53 @@ import mne.preprocessing.ecg as mne_ecg
 import heartpy.peakdetection as hp_pkdetection
 from heartpy.datautils import rolling_mean
 from wfdb import processing
+import neurokit2 as nk
 import numpy
 from typing import List
 
 # list of algorithms
-algorithms_list = ['Pan-Tompkins-ecg-detector', 'Hamilton-ecg-detector', 'Christov-ecg-detector',
-                   'Engelse-Zeelenberg-ecg-detector', 'SWT-ecg-detector', 'Matched-filter-ecg-detector',
-                   'Two-average-ecg-detector', 'Hamilton-biosppy', 'Christov-biosppy',
-                   'Engelse-Zeelenberg-biosppy', 'Gamboa-biosppy', 'mne-ecg', 'heartpy', 'gqrs-wfdb', 'xqrs-wfdb']
+algorithms_list = [
+    'Pan-Tompkins-ecg-detector', 
+    'Hamilton-ecg-detector', 
+    'Christov-ecg-detector',
+    'Engelse-Zeelenberg-ecg-detector', 
+    'SWT-ecg-detector', 
+    'Matched-filter-ecg-detector',
+    'Two-average-ecg-detector', 
+    'Hamilton-biosppy', 
+    'Christov-biosppy',
+    'Engelse-Zeelenberg-biosppy',
+    'Gamboa-biosppy',
+    'mne-ecg',
+    'heartpy',
+    'gqrs-wfdb',
+    'xqrs-wfdb',
+    'neurokit-neurokit',
+    'pantompkins1985-neurokit',
+    'nabian2018-neurokit', 
+    'gamboa2008-neurokit', 
+    'zong2003-neurokit', 
+    'hamilton2002-neurokit', 
+    'christov2004-neurokit', 
+    'engzeemod2012-neurokit', 
+    'elgendi2010-neurokit',
+    'kalidas2017-neurokit', 
+    'martinez2003-neurokit', 
+    'rodrigues2021-neurokit',
+    'promac-neurokit'
+    ]
+
+def nk_filter(method, sig, fs):
+    available_filters = ['neurokit', 'biosppy', 'pantompkins1985', 'hamilton2002', 'elgendi2010', 'engzeemod2012']
+    if method in available_filters:
+        return nk.ecg_clean(sig, fs, method=method)
+    # default filter
+    return nk.ecg_clean(sig, fs)
+
+def nk_peaks(method, sig, fs):
+    sig_filtered = nk_filter(method, sig, fs)
+    result = nk.ecg_findpeaks(sig_filtered, fs, method=method)
+    return result["ECG_R_Peaks"]
 
 
 def run_algo(algorithm: str, sig: numpy.ndarray, freq_sampling: int) -> List[int]:
@@ -88,15 +127,18 @@ def run_algo(algorithm: str, sig: numpy.ndarray, freq_sampling: int) -> List[int
         _, qrs_detections = bsp_ecg.extract_heartbeats(signal=filtered, rpeaks=rpeaks, sampling_rate=freq_sampling,
                                                        before=0.2, after=0.4)
     elif algorithm == 'mne-ecg':
-        qrs_detections = mne_ecg.qrs_detector(freq_sampling, sig)
+        qrs_detections = mne_ecg.qrs_detector(freq_sampling, sig, verbose=False)
     elif algorithm == 'heartpy':
         rol_mean = rolling_mean(sig, windowsize=0.75, sample_rate=100.0)
         qrs_detections = hp_pkdetection.detect_peaks(sig, rol_mean, ma_perc=20, sample_rate=100.0)['peaklist']
     elif algorithm == 'gqrs-wfdb':
         qrs_detections = processing.qrs.gqrs_detect(sig=sig, fs=freq_sampling)
     elif algorithm == 'xqrs-wfdb':
-        qrs_detections = processing.xqrs_detect(sig=sig, fs=freq_sampling)
+        qrs_detections = processing.xqrs_detect(sig=sig, fs=freq_sampling, verbose=False)
+    elif algorithm.endswith("-neurokit"):
+        method = algorithm[:algorithm.rindex("-neurokit")]
+        qrs_detections = nk_peaks(method, sig, freq_sampling)
     else:
-        raise ValueError(f'Sorry... unknown algorithm. Please check the list {algorithms_list}')
+        raise ValueError(f'Sorry... unknown algorithm. Please check the list {algorithms_list}' + algorithm)
     cast_qrs_detections = [int(element) for element in qrs_detections]
     return cast_qrs_detections
